@@ -1,19 +1,78 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import ProductCard from '@/components/ProductCard';
 import Testimonial from '@/components/Testimonial';
+import { shopifyFetch } from '@/lib/shopify/client';
+import { GET_PRODUCTS_BY_COLLECTION } from '@/lib/shopify/queries';
 
-export default function Home() {
+interface ShopifyProduct {
+  id: string;
+  title: string;
+  handle: string;
+  priceRange: {
+    minVariantPrice: {
+      amount: string;
+    };
+  };
+  images: {
+    edges: Array<{
+      node: {
+        url: string;
+        altText: string;
+      };
+    }>;
+  };
+}
+
+export default async function Home() {
+  let bestSellerProducts: ShopifyProduct[] = [];
+  let starterPackImage = '';
+
+  try {
+    const bestSellersResponse = await shopifyFetch({
+      query: GET_PRODUCTS_BY_COLLECTION,
+      variables: {
+        handle: 'best-sellers',
+        first: 4,
+      },
+    }) as any;
+
+    if (bestSellersResponse.collectionByHandle) {
+      bestSellerProducts = bestSellersResponse.collectionByHandle.products.edges.map(
+        (edge: any) => edge.node
+      );
+    }
+
+    const starterPackResponse = await shopifyFetch({
+      query: GET_PRODUCTS_BY_COLLECTION,
+      variables: {
+        handle: 'starter-pack',
+        first: 1,
+      },
+    }) as any;
+
+    if (
+      starterPackResponse.collectionByHandle?.products.edges[0]?.node.images
+        .edges[0]?.node.url
+    ) {
+      starterPackImage =
+        starterPackResponse.collectionByHandle.products.edges[0].node.images
+          .edges[0].node.url;
+    }
+  } catch (error) {
+    console.error('Failed to fetch collections:', error);
+  }
   return (
     <main className="bg-white">
       {/* Hero Section */}
-      <section className="text-black py-20 md:py-32 relative overflow-hidden" style={{ backgroundColor: '#f8f9f7' }}>
-        <div className="container mx-auto px-4">
+      <section className="text-black py-20 md:py-32 relative overflow-hidden" style={{ backgroundImage: 'url(/hero_banner2.png)', backgroundSize: 'cover', backgroundPosition: 'center' }}>
+        <div className="container mx-auto px-4 relative z-10">
           <div className="max-w-2xl">
             <h1 className="text-5xl md:text-6xl font-bold mb-4 leading-tight">
-              Just really great tea
+              Whole in Form, Full in Flavor.
             </h1>
             <p className="text-xl md:text-2xl text-gray-600 mb-8">
-              Stay caffeinated.
+              Premium loose leaf tea
             </p>
             <Link
               href="/products"
@@ -32,21 +91,31 @@ export default function Home() {
           <div className="grid md:grid-cols-2 gap-12 items-center">
             <div>
               <h2 className="text-4xl md:text-5xl font-bold mb-6 text-black">
-                The Premium Collection
+                Tea Lover Starter Pack
               </h2>
               <p className="text-xl text-gray-600 mb-8">
-                Shop liquid gold. Carefully curated teas from around the world.
+                Study the art of traditional tea making
               </p>
               <Link
-                href="/products"
+                href="/products?collection=starter-pack"
                 className="inline-block text-white px-8 py-3 rounded-lg font-semibold hover:opacity-90 transition"
                 style={{ backgroundColor: '#77BEF0' }}
               >
                 Shop now
               </Link>
             </div>
-            <div className="aspect-square rounded-lg flex items-center justify-center" style={{ backgroundColor: '#cbdfbd' }}>
-              <span className="text-gray-600 text-lg font-semibold">Featured Collection Image</span>
+            <div className="aspect-square rounded-lg overflow-hidden flex items-center justify-center" style={{ backgroundColor: '#cbdfbd' }}>
+              {starterPackImage ? (
+                <Image
+                  src={starterPackImage}
+                  alt="Tea Lover Starter Pack"
+                  width={400}
+                  height={400}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span className="text-gray-600 text-lg font-semibold">Featured Collection Image</span>
+              )}
             </div>
           </div>
         </div>
@@ -75,76 +144,26 @@ export default function Home() {
       {/* Shop Best-Sellers */}
       <section className="py-20 bg-white">
         <div className="container mx-auto px-4">
-          <h2 className="text-4xl font-bold mb-12 text-center">Shop best-sellers</h2>
+          <h2 className="text-4xl font-bold mb-12 text-center text-black">Shop best-sellers</h2>
           <div className="grid md:grid-cols-4 gap-6">
-            <ProductCard
-              name="Organic Green Tea"
-              price={30}
-              rating={5}
-              reviewCount={1399}
-              image="🍃"
-              badge="Organic"
-            />
-            <ProductCard
-              name="Dark Roast Tea Blend"
-              price={23}
-              rating={4.7}
-              reviewCount={569}
-              image="☕"
-              badge="Organic"
-            />
-            <ProductCard
-              name="Honey Green Tea"
-              price={30}
-              rating={3}
-              reviewCount={4}
-              image="🍯"
-              badge="Going Fast"
-            />
-            <ProductCard
-              name="Jasmine White Tea"
-              price={25}
-              rating={4.8}
-              reviewCount={848}
-              image="🌸"
-              badge="Limited Edition"
-            />
-            <ProductCard
-              name="Vanilla Blend"
-              price={20}
-              rating={4.5}
-              reviewCount={549}
-              image="🌾"
-            />
-            <ProductCard
-              name="Matcha Latte Blend"
-              price={28}
-              rating={4.6}
-              reviewCount={473}
-              image="🥗"
-              badge="Emma's Fave"
-            />
-            <ProductCard
-              name="Peppermint Tea"
-              price={24}
-              rating={4.4}
-              reviewCount={70}
-              image="🌿"
-              badge="Organic"
-            />
-            <ProductCard
-              name="Tea Infuser Set"
-              price={27}
-              rating={4.6}
-              reviewCount={629}
-              image="🫖"
-              badge="Emma's Fave"
-            />
+            {bestSellerProducts.map((product) => (
+              <ProductCard
+                key={product.id}
+                name={product.title}
+                price={parseFloat(product.priceRange.minVariantPrice.amount)}
+                rating={4.5}
+                reviewCount={0}
+                image={product.images.edges[0]?.node.url || '🍃'}
+                hideBadge
+                hideRating
+              />
+            ))}
           </div>
         </div>
       </section>
 
-      {/* Collections Grid */}
+      {/* Collections Grid - ARCHIVED: Temporarily commented out - can be uncommented later */}
+      {/* 
       <section className="py-20 bg-white">
         <div className="container mx-auto px-4">
           <h2 className="text-4xl font-bold mb-12 text-center text-black">
@@ -176,8 +195,10 @@ export default function Home() {
           </div>
         </div>
       </section>
+      */}
 
-      {/* Bundle Deals */}
+      {/* Bundle Deals - ARCHIVED: Temporarily commented out - can be uncommented later */}
+      {/* 
       <section className="py-20 bg-white">
         <div className="container mx-auto px-4">
           <h2 className="text-4xl font-bold mb-12 text-center text-black">
@@ -223,6 +244,7 @@ export default function Home() {
           </div>
         </div>
       </section>
+      */}
 
       {/* Testimonials */}
       <section className="py-20 bg-white">
