@@ -1,4 +1,5 @@
 import { Star } from 'lucide-react';
+import Image from 'next/image';
 
 interface ProductCardProps {
   image: string;
@@ -8,6 +9,8 @@ interface ProductCardProps {
   rating: number;
   reviewCount: number;
   badge?: 'Organic' | 'Limited Edition' | 'Going Fast' | 'Bundle & Save' | "Emma's Fave";
+  hideBadge?: boolean;
+  hideRating?: boolean;
 }
 
 export default function ProductCard({
@@ -18,15 +21,26 @@ export default function ProductCard({
   rating,
   reviewCount,
   badge,
+  hideBadge,
+  hideRating,
 }: ProductCardProps) {
   return (
     <div className="bg-white rounded-lg overflow-hidden hover:shadow-md transition group">
       {/* Image Container */}
       <div className="relative overflow-hidden bg-gray-100 aspect-square">
-        <div className="w-full h-full bg-gray-100 flex items-center justify-center text-gray-400">
-          {image}
-        </div>
-        {badge && (
+        {image && (image.startsWith('http') || image.startsWith('/')) ? (
+          <Image
+            src={image}
+            alt={name}
+            fill
+            className="object-cover w-full h-full"
+          />
+        ) : (
+          <div className="w-full h-full bg-gray-100 flex items-center justify-center text-gray-400 text-4xl">
+            {image}
+          </div>
+        )}
+        {badge && !hideBadge && (
           <div className="absolute top-3 left-3 bg-white bg-opacity-90 text-black px-2 py-1 rounded text-xs font-semibold">
             {badge}
           </div>
@@ -50,18 +64,20 @@ export default function ProductCard({
         </div>
 
         {/* Rating */}
-        <div className="flex items-center gap-2 mb-4">
-          <div className="flex gap-1">
-            {[...Array(5)].map((_, i) => (
-              <Star
-                key={i}
-                size={14}
-                className={i < Math.floor(rating) ? 'fill-gray-400 text-gray-400' : 'fill-gray-200 text-gray-200'}
-              />
-            ))}
+        {!hideRating && (
+          <div className="flex items-center gap-2 mb-4">
+            <div className="flex gap-1">
+              {[...Array(5)].map((_, i) => (
+                <Star
+                  key={i}
+                  size={14}
+                  className={i < Math.floor(rating) ? 'fill-gray-400 text-gray-400' : 'fill-gray-200 text-gray-200'}
+                />
+              ))}
+            </div>
+            <span className="text-xs text-gray-600">{reviewCount}</span>
           </div>
-          <span className="text-xs text-gray-600">{reviewCount}</span>
-        </div>
+        )}
 
         {/* Add to Cart Button */}
         <button
