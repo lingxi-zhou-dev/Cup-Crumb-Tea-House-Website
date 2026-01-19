@@ -27,7 +27,7 @@ interface Product {
   };
 }
 
-export default function ProductsPage() {
+export default function SpreadsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -38,7 +38,7 @@ export default function ProductsPage() {
         const data = await shopifyFetch({
           query: GET_PRODUCTS_BY_COLLECTION,
           variables: {
-            handle: 'teas',
+            handle: 'spreads',
             first: 20,
           },
         });
@@ -50,7 +50,7 @@ export default function ProductsPage() {
           setProducts(productList);
         }
       } catch (err) {
-        setError('Failed to load products. Please check your Shopify configuration.');
+        setError('Failed to load spreads. Please check your Shopify configuration.');
         console.error(err);
       } finally {
         setLoading(false);
@@ -65,9 +65,9 @@ export default function ProductsPage() {
       {/* Hero Section */}
       <section className="text-black py-16 relative overflow-hidden" style={{ backgroundColor: '#f8f9f7' }}>
         <div className="container mx-auto px-4">
-          <h1 className="text-5xl font-bold mb-4">Our Premium Teas</h1>
+          <h1 className="text-5xl font-bold mb-4">Our Premium Spreads</h1>
           <p className="text-xl text-gray-600">
-            Handpicked selections from around the world, carefully sourced and freshly prepared.
+            Artisanal jams and spreads crafted to pair perfectly with your favorite teas.
           </p>
         </div>
       </section>
@@ -77,7 +77,7 @@ export default function ProductsPage() {
         <div className="container mx-auto px-4 py-4">
           <Link href="/" className="text-black hover:opacity-60 transition">Home</Link>
           <span className="text-gray-600 mx-2">/</span>
-          <span className="text-gray-600">Teas</span>
+          <span className="text-gray-600">Spreads</span>
         </div>
       </div>
 
@@ -89,7 +89,7 @@ export default function ProductsPage() {
               <div className="inline-block animate-spin">
                 <div className="w-8 h-8 border-4 border-gray-300 border-t-black rounded-full"></div>
               </div>
-              <p className="mt-4 text-gray-600">Loading products...</p>
+              <p className="mt-4 text-gray-600">Loading spreads...</p>
             </div>
           )}
 
@@ -103,7 +103,7 @@ export default function ProductsPage() {
           {!loading && !error && products.length === 0 && (
             <div className="text-center py-12">
               <p className="text-gray-600 text-lg">
-                No products found. Please add products to your &quot;teas&quot; collection in Shopify.
+                No spreads found. Please add products to your &quot;spreads&quot; collection in Shopify.
               </p>
             </div>
           )}
@@ -119,7 +119,7 @@ export default function ProductsPage() {
                 {products.map((product) => (
                   <div
                     key={product.id}
-                    className="bg-white rounded-lg overflow-hidden hover:shadow-lg transition group"
+                    className="bg-white rounded-lg overflow-hidden hover:shadow-md transition group"
                   >
                     {/* Image Container */}
                     <div className="relative overflow-hidden bg-gray-100 aspect-square">
@@ -138,7 +138,7 @@ export default function ProductsPage() {
 
                     {/* Content */}
                     <div className="p-4">
-                      <h3 className="font-semibold text-lg mb-2 line-clamp-2 text-black">
+                      <h3 className="font-semibold text-base mb-2 line-clamp-2 text-black">
                         {product.title}
                       </h3>
 
@@ -153,11 +153,11 @@ export default function ProductsPage() {
                             <Star
                               key={i}
                               size={14}
-                              className="fill-gray-300"
+                              className={i < 4 ? 'fill-gray-400 text-gray-400' : 'fill-gray-200 text-gray-200'}
                             />
                           ))}
                         </div>
-                        <span className="text-xs text-gray-500">5.0</span>
+                        <span className="text-xs text-gray-600">24</span>
                       </div>
 
                       {/* Price */}
