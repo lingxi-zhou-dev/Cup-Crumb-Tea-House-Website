@@ -3,10 +3,10 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
-  --cream: #FFF1CB;
-  --light-blue: #C2E2FA;
-  --light-coral: #FF8F8F;
-  --soft-pink: #B7A3E3;
+  --primary-blue: #77BEF0;
+  --accent-gold: #FFCB61;
+  --accent-orange: #FF894F;
+  --accent-coral: #EA5B6F;
 }
 
 @theme inline {

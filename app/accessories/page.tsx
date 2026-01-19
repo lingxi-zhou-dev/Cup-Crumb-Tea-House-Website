@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { shopifyFetch } from '@/lib/shopify/client';
 import { GET_PRODUCTS_BY_COLLECTION } from '@/lib/shopify/queries';
+import Link from 'next/link';
+import { Star } from 'lucide-react';
 
 interface Product {
   id: string;
@@ -59,53 +61,127 @@ export default function AccessoriesPage() {
   }, []);
 
   return (
-    <main className="container mx-auto px-4 py-12">
-      <h1 className="text-4xl font-bold text-black mb-8">Accessories</h1>
-
-      {loading && <p className="text-center text-black">Loading products...</p>}
-
-      {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-8">
-          {error}
+    <main className="bg-white">
+      {/* Hero Section */}
+      <section className="text-black py-16 relative overflow-hidden" style={{ backgroundColor: '#f8f9f7' }}>
+        <div className="container mx-auto px-4">
+          <h1 className="text-5xl font-bold mb-4">Tea Accessories</h1>
+          <p className="text-xl text-gray-600">
+            Everything you need for the perfect tea experience. Premium tools and accessories for tea lovers.
+          </p>
         </div>
-      )}
+      </section>
 
-      {!loading && !error && products.length === 0 && (
-        <p className="text-center text-gray-600">No accessories found. Please add products to your &quot;accessories&quot; collection in Shopify.</p>
-      )}
+      {/* Breadcrumb */}
+      <div className="border-b border-gray-100" style={{ backgroundColor: '#f8f9f7' }}>
+        <div className="container mx-auto px-4 py-4">
+          <Link href="/" className="text-black hover:opacity-60 transition">Home</Link>
+          <span className="text-gray-600 mx-2">/</span>
+          <span className="text-gray-600">Accessories</span>
+        </div>
+      </div>
 
-      {!loading && !error && products.length > 0 && (
-        <div className="grid md:grid-cols-3 lg:grid-cols-4 gap-6">
-          {products.map((product) => (
-            <div
-              key={product.id}
-              className="bg-white rounded-lg shadow-md hover:shadow-lg transition overflow-hidden"
-            >
-              {product.images.edges[0] && (
-                <img
-                  src={product.images.edges[0].node.url}
-                  alt={product.images.edges[0].node.altText || product.title}
-                  className="w-full h-48 object-cover"
-                />
-              )}
-              <div className="p-4">
-                <h3 className="font-bold text-lg mb-2 text-black">{product.title}</h3>
-                <p className="text-black text-sm mb-4 line-clamp-2">
-                  {product.description}
-                </p>
-                <div className="flex justify-between items-center">
-                  <span className="text-lg font-bold" style={{ color: '#C2E2FA' }}>
-                    ${product.priceRange.minVariantPrice.amount}
-                  </span>
-                  <button className="text-white px-4 py-2 rounded transition" style={{ backgroundColor: '#C2E2FA' }}>
-                    Add to Cart
-                  </button>
-                </div>
+      {/* Products Section */}
+      <section className="py-20">
+        <div className="container mx-auto px-4">
+          {loading && (
+            <div className="text-center py-12">
+              <div className="inline-block animate-spin">
+                <div className="w-8 h-8 border-4 border-gray-300 border-t-black rounded-full"></div>
               </div>
+              <p className="mt-4 text-gray-600">Loading accessories...</p>
             </div>
-          ))}
+          )}
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-6 py-4 rounded-lg mb-8">
+              <p className="font-semibold">Error</p>
+              <p>{error}</p>
+            </div>
+          )}
+
+          {!loading && !error && products.length === 0 && (
+            <div className="text-center py-12">
+              <p className="text-gray-600 text-lg">
+                No accessories found. Please add products to your &quot;accessories&quot; collection in Shopify.
+              </p>
+            </div>
+          )}
+
+          {!loading && !error && products.length > 0 && (
+            <>
+              <div className="mb-8">
+                <p className="text-gray-600">
+                  Showing <span className="font-semibold text-black">{products.length}</span> products
+                </p>
+              </div>
+              <div className="grid md:grid-cols-4 gap-6">
+                {products.map((product) => (
+                  <div
+                    key={product.id}
+                    className="bg-white rounded-lg overflow-hidden hover:shadow-lg transition group"
+                  >
+                    {/* Image Container */}
+                    <div className="relative overflow-hidden bg-gray-100 aspect-square">
+                      {product.images.edges[0] ? (
+                        <img
+                          src={product.images.edges[0].node.url}
+                          alt={product.images.edges[0].node.altText || product.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-400">
+                          No image
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Content */}
+                    <div className="p-4">
+                      <h3 className="font-semibold text-lg mb-2 line-clamp-2 text-black">
+                        {product.title}
+                      </h3>
+
+                      <p className="text-gray-600 text-sm mb-4 line-clamp-2">
+                        {product.description}
+                      </p>
+
+                      {/* Rating */}
+                      <div className="flex items-center gap-2 mb-4">
+                        <div className="flex gap-1">
+                          {[...Array(5)].map((_, i) => (
+                            <Star
+                              key={i}
+                              size={14}
+                              className="fill-gray-300"
+                            />
+                          ))}
+                        </div>
+                        <span className="text-xs text-gray-500">5.0</span>
+                      </div>
+
+                      {/* Price */}
+                      <div className="mb-4">
+                        <span className="text-lg font-bold text-black">
+                          ${product.priceRange.minVariantPrice.amount}
+                        </span>
+                      </div>
+
+                      {/* Add to Cart Button */}
+                      <button
+                        className="w-full py-2 text-white rounded-lg hover:opacity-85 transition font-semibold"
+                        style={{ backgroundColor: '#77BEF0' }}
+                      >
+                        Add to cart
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
-      )}
+      </section>
     </main>
   );
 }
