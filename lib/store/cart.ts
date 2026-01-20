@@ -43,7 +43,11 @@ export interface CartCost {
 
 export interface Cart {
   id: string;
-  lines: CartItem[];
+  lines: {
+    edges: Array<{
+      node: CartItem;
+    }>;
+  };
   cost: CartCost;
   checkoutUrl: string;
 }

@@ -22,6 +22,14 @@ interface ShopifyProduct {
       };
     }>;
   };
+  variants: {
+    edges: Array<{
+      node: {
+        id: string;
+        availableForSale: boolean;
+      };
+    }>;
+  };
 }
 
 export default async function Home() {
@@ -97,7 +105,7 @@ export default async function Home() {
                 Study the art of traditional tea making
               </p>
               <Link
-                href="/products?collection=starter-pack"
+                href="/products/tea-lover-starter-pack"
                 className="inline-block text-white px-8 py-3 rounded-lg font-semibold hover:opacity-90 transition"
                 style={{ backgroundColor: '#77BEF0' }}
               >
@@ -146,7 +154,9 @@ export default async function Home() {
         <div className="container mx-auto px-4">
           <h2 className="text-4xl font-bold mb-12 text-center text-black">Shop best-sellers</h2>
           <div className="grid md:grid-cols-4 gap-6">
-            {bestSellerProducts.map((product) => (
+            {bestSellerProducts.map((product) => {
+              const isOutOfStock = !product?.variants?.edges?.some((edge: any) => edge.node.availableForSale);
+              return (
               <ProductCard
                 key={product.id}
                 name={product.title}
@@ -154,10 +164,14 @@ export default async function Home() {
                 rating={4.5}
                 reviewCount={0}
                 image={product.images.edges[0]?.node.url || '🍃'}
+                handle={product.handle}
+                variantId={product.variants?.edges?.[0]?.node?.id || ''}
                 hideBadge
                 hideRating
+                isOutOfStock={isOutOfStock}
               />
-            ))}
+              );
+            })}
           </div>
         </div>
       </section>
