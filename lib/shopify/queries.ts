@@ -114,6 +114,14 @@ export const CREATE_CART = `
                   product {
                     title
                     handle
+                    images(first: 1) {
+                      edges {
+                        node {
+                          url
+                          altText
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -162,6 +170,14 @@ export const ADD_TO_CART = `
                   product {
                     title
                     handle
+                    images(first: 1) {
+                      edges {
+                        node {
+                          url
+                          altText
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -210,6 +226,14 @@ export const REMOVE_FROM_CART = `
                   product {
                     title
                     handle
+                    images(first: 1) {
+                      edges {
+                        node {
+                          url
+                          altText
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -286,6 +310,62 @@ export const GET_CART = `
         }
       }
       checkoutUrl
+    }
+  }
+`;
+
+// Mutation to update cart line quantities
+export const UPDATE_CART = `
+  mutation UpdateCart($cartId: ID!, $lines: [CartLineUpdateInput!]!) {
+    cartLinesUpdate(cartId: $cartId, lines: $lines) {
+      cart {
+        id
+        lines(first: 100) {
+          edges {
+            node {
+              id
+              quantity
+              merchandise {
+                ... on ProductVariant {
+                  id
+                  title
+                  priceV2 {
+                    amount
+                    currencyCode
+                  }
+                  product {
+                    title
+                    handle
+                    images(first: 1) {
+                      edges {
+                        node {
+                          url
+                          altText
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        cost {
+          subtotalAmount {
+            amount
+            currencyCode
+          }
+          totalAmount {
+            amount
+            currencyCode
+          }
+          totalTaxAmount {
+            amount
+            currencyCode
+          }
+        }
+        checkoutUrl
+      }
     }
   }
 `;

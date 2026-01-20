@@ -5,6 +5,7 @@ import { shopifyFetch } from '@/lib/shopify/client';
 import { GET_PRODUCTS_BY_COLLECTION } from '@/lib/shopify/queries';
 import Link from 'next/link';
 import { Star } from 'lucide-react';
+import { AddToCartButton } from '@/components/AddToCartButton';
 
 interface Product {
   id: string;
@@ -22,6 +23,14 @@ interface Product {
       node: {
         url: string;
         altText?: string;
+      };
+    }>;
+  };
+  variants: {
+    edges: Array<{
+      node: {
+        id: string;
+        availableForSale: boolean;
       };
     }>;
   };
@@ -116,11 +125,17 @@ export default function SpreadsPage() {
                 </p>
               </div>
               <div className="grid md:grid-cols-4 gap-6">
-                {products.map((product) => (
-                  <div
+                {products.map((product) => {
+                  const isOutOfStock = !product?.variants?.edges?.some((edge: any) => edge.node.availableForSale);
+                  return (
+                  <Link
                     key={product.id}
-                    className="bg-white rounded-lg overflow-hidden hover:shadow-md transition group"
+                    href={`/products/${product.handle}`}
+                    className="block"
                   >
+                    <div
+                      className="bg-white rounded-lg overflow-hidden hover:shadow-lg transition group h-full"
+                    >
                     {/* Image Container */}
                     <div className="relative overflow-hidden bg-gray-100 aspect-square">
                       {product.images.edges[0] ? (
@@ -132,6 +147,11 @@ export default function SpreadsPage() {
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-gray-400">
                           No image
+                        </div>
+                      )}
+                      {isOutOfStock && (
+                        <div className="absolute top-3 left-3 bg-red-500 text-white px-2 py-1 rounded text-xs font-semibold">
+                          Out of Stock
                         </div>
                       )}
                     </div>
@@ -168,15 +188,12 @@ export default function SpreadsPage() {
                       </div>
 
                       {/* Add to Cart Button */}
-                      <button
-                        className="w-full py-2 text-white rounded-lg hover:opacity-85 transition font-semibold"
-                        style={{ backgroundColor: '#77BEF0' }}
-                      >
-                        Add to cart
-                      </button>
+                      <AddToCartButton variantId={product.variants.edges[0]?.node.id || ''} disabled={isOutOfStock} />
                     </div>
-                  </div>
-                ))}
+                    </div>
+                  </Link>
+                  );
+                })}
               </div>
             </>
           )}

@@ -1,0 +1,604 @@
+================================================================================
+SHOPPING CART ARCHITECTURE - COMPLETE GUIDE
+================================================================================
+
+OVERVIEW
+--------
+
+The shopping cart system is a hybrid solution combining:
+- Client-side state management (Zustand with localStorage persistence)
+- Server-side cart storage (Shopify Storefront API)
+- React components for UI interaction
+
+The cart state flows between these layers continuously.
+
+
+================================================================================
+1. STATE MANAGEMENT LAYER
+================================================================================
+
+1.1 ZUSTAND STORE (lib/store/cart.ts)
+
+Purpose: Single source of truth for cart state on the client
+
+Structure:
+
+interface CartItem {
+  id: string;                    // Unique line item ID (gid://shopify/CartLine/...)
+  quantity: number;              // How many of this item
+  merchandise: {
+    id: string;                  // ProductVariant ID
+    title: string;               // Variant name
+    priceV2: {
+      amount: string;            // Price as string (e.g., "29.99")
+      currencyCode: string;       // "USD"
+    };
+    product: {
+      title: string;             // Product name
+      handle: string;            // URL-friendly name
+      images?: {
+        edges: Array<{
+          node: {
+            url: string;         // Image URL from Shopify CDN
+            altText: string;     // Alt text
+          };
+        }>;
+      };
+    };
+  };
+}
+
+interface Cart {
+  id: string;                    // Cart ID (gid://shopify/Cart/...)
+  lines: {
+    edges: Array<{
+      node: CartItem;
+    }>;
+  };
+  cost: CartCost;                // Pricing info
+  checkoutUrl: string;           // Link to Shopify checkout
+}
+
+interface CartCost {
+  subtotalAmount: { amount: string; currencyCode: string };
+  totalAmount: { amount: string; currencyCode: string };
+  totalTaxAmount: { amount: string; currencyCode: string };
+}
+
+Key Methods:
+- setCart(cart) - Updates the entire cart object
+- clearCart() - Empties the cart
+- getCartId() - Returns current cart ID or null
+
+Persistence:
+- Automatically saved to localStorage under key "cart-storage"
+- Survives page refreshes
+- Shared across tabs on same domain
+
+
+================================================================================
+2. SHOPIFY API INTEGRATION
+================================================================================
+
+2.1 GRAPHQL CLIENT (lib/shopify/client.ts)
+
+Purpose: Low-level HTTP layer for Shopify API communication
+
+How it works:
+
+User Code
+    ↓
+shopifyFetch({ query, variables })
+    ↓
+fetch(POST) to https://[STORE].myshopify.com/api/2024-01/graphql.json
+    ↓
+Headers:
+  - Content-Type: application/json
+  - X-Shopify-Storefront-Access-Token: [TOKEN]
+Body:
+  - query: GraphQL mutation/query string
+  - variables: { cartId, lineIds, etc }
+    ↓
+Response from Shopify
+    ↓
+If response.errors → throw Error("Shopify GraphQL Error: ...")
+If no errors → return response.data
+
+Key Points:
+- Returns response.data (the actual data), NOT the full response object
+- Throws exceptions on ANY Shopify error
+- Status code is checked (if !response.ok, throw)
+
+
+2.2 GRAPHQL QUERIES/MUTATIONS (lib/shopify/queries.ts)
+
+Available Operations:
+
+CREATE_CART
+  When: First time adding to cart (no existing cartId)
+  Input: Initial product/variant to add
+  Output: New cart with one item
+  Response Structure: 
+    {
+      cartCreate {
+        cart {
+          id
+          lines { edges { node { ... } } }
+          cost { ... }
+          checkoutUrl
+        }
+      }
+    }
+
+ADD_TO_CART
+  When: Adding items to existing cart
+  Input: cartId, array of { merchandiseId, quantity }
+  Output: Updated cart with new items added
+  Response Structure:
+    {
+      cartLinesAdd {
+        cart { ... same as CREATE_CART ... }
+      }
+    }
+
+UPDATE_CART
+  When: Changing quantity of existing items
+  Input: cartId, array of { id (lineId), quantity }
+  Output: Updated cart with new quantities
+  Response Structure:
+    {
+      cartLinesUpdate {
+        cart { ... same structure ... }
+      }
+    }
+
+REMOVE_FROM_CART
+  When: Deleting items from cart
+  Input: cartId, array of lineIds to remove
+  Output: Updated cart with items removed
+  Response Structure:
+    {
+      cartLinesRemove {
+        cart { ... same structure ... }
+      }
+    }
+
+GET_CART
+  When: Fetching current cart state
+  Input: cartId
+  Output: Full cart object
+  Response Structure:
+    {
+      cart {
+        id
+        lines { edges { node { ... } } }
+        cost { ... }
+        checkoutUrl
+      }
+    }
+
+
+================================================================================
+3. CUSTOM HOOKS
+================================================================================
+
+3.1 useAddToCart (lib/hooks/useAddToCart.ts)
+
+Purpose: Handle adding items to cart
+
+Flow:
+
+User clicks "Add to Cart" button (on product page)
+    ↓
+AddToCartButton calls useAddToCart().addToCart(variantId, quantity)
+    ↓
+Hook checks: Is there a cartId in Zustand store?
+    ├─ NO: Call CREATE_CART mutation
+    │       ↓
+    │       Get back new cart with item
+    │       ↓
+    │       setCart(newCart) in Zustand
+    │
+    └─ YES: Call ADD_TO_CART mutation with cartId
+            ↓
+            Get back updated cart
+            ↓
+            setCart(updatedCart) in Zustand
+    ↓
+Return { success: true, cart }
+
+Error Handling:
+- No retry logic (add-to-cart is usually not throttled)
+- Returns error object instead of throwing
+
+
+3.2 useRemoveFromCart (lib/hooks/useRemoveFromCart.ts)
+
+Purpose: Handle removing items from cart
+
+Flow:
+
+User clicks trash/remove button
+    ↓
+Enforce 5-second minimum between requests (global rate limiting)
+    ↓
+Check if cart exists, if not return error
+    ↓
+RETRY LOOP (up to 5 attempts):
+  Attempt 1:
+    - Call REMOVE_FROM_CART mutation
+    - If success → return { success: true }
+    - If throttled AND retries left → wait 3s, retry
+    - If throttled AND no retries → return error
+    - If other error → return error
+  
+  Attempt 2: Wait 6s before trying
+  Attempt 3: Wait 9s before trying
+  Attempt 4: Wait 12s before trying
+  Attempt 5: Wait 15s before trying (then give up)
+    ↓
+Update Zustand store with new cart
+    ↓
+Return result
+
+Key Features:
+- Global lastRequestTime variable prevents concurrent requests
+- Exponential backoff (3s × attempt number)
+- Handles Shopify throttling automatically
+
+
+3.3 useUpdateQuantity (lib/hooks/useUpdateQuantity.ts)
+
+Purpose: Handle quantity adjustments
+
+Identical to useRemoveFromCart, but calls UPDATE_CART mutation instead
+
+Input: 
+- lineId - which item to update
+- quantity - new quantity (must be > 0)
+
+
+================================================================================
+4. UI COMPONENTS
+================================================================================
+
+4.1 ProductCard (components/ProductCard.tsx)
+
+Used on: Home page best-sellers section
+
+Props:
+{
+  image: string;           // URL or emoji
+  name: string;            // Product title
+  price: string;           // Current price
+  originalPrice?: string;  // Old price (if on sale)
+  rating?: number;         // Star rating (usually 4.5)
+  reviewCount?: number;    // Number of reviews
+  badge?: string;          // Label (e.g., "Best Seller")
+  hideBadge?: boolean;     // Hide badge label
+  hideRating?: boolean;    // Hide star rating
+  handle: string;          // Product URL slug
+  variantId?: string;      // For add-to-cart
+}
+
+Behavior:
+- Wraps product in <Link> to /products/[handle]
+- If variantId provided, shows AddToCartButton
+- Conditionally renders AddToCartButton
+
+
+4.2 AddToCartButton (components/AddToCartButton.tsx)
+
+Purpose: Reusable "Add to Cart" button
+
+Props:
+{
+  variantId: string;       // Shopify variant ID
+  quantity?: number;       // How many (default 1)
+}
+
+Behavior:
+- On click: prevents default link behavior + event propagation
+- Calls useAddToCart().addToCart(variantId, quantity)
+- Shows "Added to cart!" for 2 seconds on success
+- Shows error message for 3 seconds on failure
+- Disabled while loading
+
+
+4.3 Shopping Cart Page (app/cart/page.tsx)
+
+Purpose: Display cart items and allow modifications
+
+Components:
+- Left side (2/3 width):
+  - List of cart items in cards
+  - Each item shows:
+    - Product image (from merchandise.product.images)
+    - Product title (clickable link)
+    - Quantity adjuster (-, number, +)
+    - Total price for that line item
+    - Remove button (trash icon)
+
+- Right sidebar (1/3 width):
+  - Order Summary
+  - Subtotal
+  - Tax
+  - Total
+  - "Proceed to Checkout" button (redirects to Shopify)
+  - "Continue Shopping" button (link to /products)
+
+State Management:
+const { cart } = useCartStore();           // Get cart from store
+const { removeFromCart, isRemoving } = useRemoveFromCart();
+const { updateQuantity, isUpdating } = useUpdateQuantity();
+const isLoading = isRemoving || isUpdating; // Combined loading state
+
+Button Handlers:
+const handleRemove = async (lineId) => {
+  const result = await removeFromCart([lineId]);
+  if (!result.success) {
+    alert('Error: ' + result.error);
+  }
+  // Zustand store auto-updates, component re-renders
+}
+
+const handleUpdateQuantity = async (lineId, quantity) => {
+  if (quantity > 0) {
+    const result = await updateQuantity(lineId, quantity);
+    if (!result.success) {
+      alert('Error: ' + result.error);
+    }
+  }
+}
+
+
+================================================================================
+5. DATA FLOW EXAMPLES
+================================================================================
+
+EXAMPLE 1: Adding Product to Empty Cart
+
+User on home page sees "Chai Tea Set"
+Clicks "Add to Cart" button
+    ↓
+AddToCartButton.onClick fires
+    ↓
+useAddToCart().addToCart("gid://shopify/ProductVariant/12345", 1)
+    ↓
+Hook checks cart store → cartId is null
+    ↓
+Call CREATE_CART mutation with:
+  - merchandiseId: "gid://shopify/ProductVariant/12345"
+  - quantity: 1
+    ↓
+Shopify creates new cart, returns:
+  {
+    cartCreate: {
+      cart: {
+        id: "gid://shopify/Cart/abc123?key=xyz",
+        lines: {
+          edges: [{
+            node: {
+              id: "gid://shopify/CartLine/line1",
+              quantity: 1,
+              merchandise: { ... }
+            }
+          }]
+        },
+        cost: { ... },
+        checkoutUrl: "https://shopify-checkout.com/..."
+      }
+    }
+  }
+    ↓
+Hook calls setCart(newCart)
+    ↓
+Zustand updates store AND localStorage
+    ↓
+AddToCartButton shows "Added to cart!" for 2 seconds
+
+
+EXAMPLE 2: Removing Item from Cart
+
+User on cart page clicks trash icon next to "Chai Tea Set"
+    ↓
+handleRemove("gid://shopify/CartLine/line1") fires
+    ↓
+removeFromCart(["gid://shopify/CartLine/line1"]) called
+    ↓
+Check 5-second rate limit timer
+    ├─ If time passed: proceed immediately
+    └─ If not: wait until 5 seconds have passed
+    ↓
+Enter retry loop:
+  Try 1: Call REMOVE_FROM_CART mutation
+    - If Shopify returns "Throttled" → wait 3s, retry
+    - If success → extract updatedCart from response
+    - Call setCart(updatedCart)
+    - Return { success: true }
+    ↓
+Zustand updates store
+    ↓
+Component re-renders
+    ↓
+"Chai Tea Set" disappears from cart
+    ↓
+Order summary recalculates totals
+
+
+EXAMPLE 3: Updating Quantity
+
+User clicks + button to increase quantity from 1 to 2
+    ↓
+handleUpdateQuantity("gid://shopify/CartLine/line1", 2) fires
+    ↓
+updateQuantity() called
+    ↓
+Enforce 5-second minimum since last request
+    ↓
+Call UPDATE_CART mutation with:
+  - cartId: "gid://shopify/Cart/abc123?key=xyz"
+  - lines: [{
+      id: "gid://shopify/CartLine/line1",
+      quantity: 2
+    }]
+    ↓
+Shopify updates cart, returns new cart object
+    ↓
+Hook extracts updatedCart.cartLinesUpdate.cart
+    ↓
+setCart(updatedCart)
+    ↓
+Zustand updates
+    ↓
+Component re-renders
+    ↓
+Quantity shows "2"
+    ↓
+Price updates (e.g., "$29.99 × 2 = $59.98")
+
+
+================================================================================
+6. RATE LIMITING & THROTTLING
+================================================================================
+
+THE PROBLEM
+
+Shopify Storefront API has rate limits:
+- Standard: ~40 requests per second
+- Development Store: Much stricter (often 1 request per 10+ seconds)
+
+When you exceed the limit, Shopify returns:
+{
+  "message": "Throttled",
+  "path": ["cartLinesUpdate"],
+  "extensions": {
+    "code": "THROTTLED",
+    "requestId": "..."
+  }
+}
+
+OUR SOLUTION
+
+Global Rate Limiter (in both hooks):
+let lastRequestTime = 0;
+const MIN_REQUEST_INTERVAL = 5000; // 5 seconds
+
+// Before making request:
+const timeSinceLastRequest = Date.now() - lastRequestTime;
+const waitTime = Math.max(0, MIN_REQUEST_INTERVAL - timeSinceLastRequest);
+if (waitTime > 0) {
+  await delay(waitTime);
+}
+
+Automatic Retry Logic:
+- If request is throttled → wait 3s, try again
+- If still throttled → wait 6s, try again
+- Max 5 attempts before giving up
+
+WHY IT'S STILL NOT WORKING
+
+Possible reasons:
+1. Development store with 10+ second limit - Our 5-second minimum isn't enough
+2. Multiple requests sent simultaneously - Despite our debouncing
+3. Invalid cart/line IDs - Causing internal Shopify errors
+4. Storefront token permissions - Missing write access
+5. GraphQL mutation syntax error - Wrong field names
+
+
+================================================================================
+7. KEY FILES SUMMARY
+================================================================================
+
+FILE                                    PURPOSE
+────────────────────────────────────────────────────────────────────────────
+lib/store/cart.ts                       Zustand cart store (state management)
+lib/shopify/client.ts                   Low-level Shopify API client
+lib/shopify/queries.ts                  All GraphQL queries/mutations
+lib/hooks/useAddToCart.ts               Hook for adding items
+lib/hooks/useRemoveFromCart.ts          Hook for removing items
+lib/hooks/useUpdateQuantity.ts          Hook for quantity changes
+components/AddToCartButton.tsx          Reusable add-to-cart button
+components/ProductCard.tsx              Product card with add-to-cart
+app/cart/page.tsx                       Shopping cart page UI
+app/layout.tsx                          Root layout (imports cart store)
+.env.local                              Shopify store URL and token
+
+
+================================================================================
+8. DEBUGGING CHECKLIST
+================================================================================
+
+CHECK CART STORE
+
+In browser console:
+const stored = JSON.parse(localStorage.getItem('cart-storage'));
+console.log('Cart ID:', stored.state.cart?.id);
+console.log('Items:', stored.state.cart?.lines?.edges?.length);
+console.log('First item ID:', stored.state.cart?.lines?.edges?.[0]?.node?.id);
+
+
+TEST DIRECT API CALL
+
+curl -X POST "https://YOUR_STORE.myshopify.com/api/2024-01/graphql.json" \
+  -H "Content-Type: application/json" \
+  -H "X-Shopify-Storefront-Access-Token: YOUR_TOKEN" \
+  -d '{"query":"query { shop { name } }"}'
+
+
+CHECK NETWORK TAB
+
+1. Open DevTools → Network
+2. Click remove/quantity button
+3. Look for GraphQL request
+4. Check response headers for X-Shopify-Shop-Api-Call-Limit
+5. Check if Retry-After header present
+
+
+VERIFY PERMISSIONS
+
+- Shopify Admin → Apps → Your App → Configuration
+- Check "Storefront API access scopes"
+- Make sure these are enabled:
+  - unauthenticated_write_carts
+  - unauthenticated_read_carts
+
+
+CHECK STORE PLAN
+
+- Shopify Admin → Settings → Plan
+- Development stores have stricter limits
+- Some plans may require upgrade
+
+
+================================================================================
+9. COMMON ISSUES & SOLUTIONS
+================================================================================
+
+ISSUE                          LIKELY CAUSE                    SOLUTION
+────────────────────────────────────────────────────────────────────────────
+"No cart found" error          No CREATE_CART on first add     Check useAddToCart flow, try adding item first
+Throttled immediately          Store rate limit too strict     Wait 10+ seconds between operations
+Cart not updating              Zustand not re-rendering        Check React DevTools, look for state changes
+Invalid cart ID error          Line ID format wrong            Log lineIds to console, verify format
+Images not showing             Image URLs wrong                Check merchandise.product.images structure
+Buttons stay disabled          isLoading never becomes false   Check error handling, console for exceptions
+10+ second delay               Our rate limiter waiting        This is expected, may need to increase MIN_REQUEST_INTERVAL
+
+
+================================================================================
+10. NEXT STEPS TO FIX
+================================================================================
+
+1. Run curl test from terminal to confirm Shopify API works
+
+2. Check store plan - may need upgrade or development store limits adjustment
+
+3. Verify token permissions - ensure write access enabled
+
+4. Monitor network tab - see if requests are actually sending
+
+5. Check for Retry-After header - tells us minimum wait time Shopify requires
+
+6. Consider backend solution - if Shopify limits are too restrictive, may need 
+   to proxy through your server instead of calling directly from browser

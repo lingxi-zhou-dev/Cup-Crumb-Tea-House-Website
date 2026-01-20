@@ -2,106 +2,186 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useCartStore } from '@/lib/store/cart';
+import { useRemoveFromCart } from '@/lib/hooks/useRemoveFromCart';
+import { useUpdateQuantity } from '@/lib/hooks/useUpdateQuantity';
+import { Trash2, Plus, Minus } from 'lucide-react';
 
 export default function CartPage() {
   const { cart } = useCartStore();
+  const { removeFromCart, isLoading: isRemoving } = useRemoveFromCart();
+  const { updateQuantity, isLoading: isUpdating } = useUpdateQuantity();
   const [isClient, setIsClient] = useState(false);
+  const isLoading = isRemoving || isUpdating;
 
   useEffect(() => {
     setIsClient(true);
   }, []);
 
+  const handleRemove = async (lineId: string) => {
+    const result = await removeFromCart([lineId]);
+    if (!result.success && result.error) {
+      alert('Error: ' + result.error);
+    }
+  };
+
+  const handleUpdateQuantity = async (lineId: string, quantity: number) => {
+    if (quantity > 0) {
+      const result = await updateQuantity(lineId, quantity);
+      if (!result.success && result.error) {
+        alert('Error: ' + result.error);
+      }
+    }
+  };
+
   if (!isClient) {
     return <div>Loading...</div>;
   }
 
-  if (!cart || cart.lines.length === 0) {
+  // Extract lines from cart structure
+  const cartLines = cart?.lines?.edges?.map((edge) => edge.node) || [];
+
+  if (!cart || cartLines.length === 0) {
     return (
-      <main className="container mx-auto px-4 py-12">
-        <h1 className="text-4xl font-bold text-black mb-8">Shopping Cart</h1>
-        <div className="bg-white rounded-lg shadow-md p-8 text-center">
-          <p className="text-black mb-4">Your cart is empty</p>
-          <Link href="/products" className="inline-block bg-amber-700 hover:bg-amber-800 text-white px-6 py-2 rounded transition">
-            Continue Shopping
-          </Link>
+      <main className="bg-white min-h-screen">
+        <div className="container mx-auto px-4 py-20">
+          <h1 className="text-5xl font-bold text-black mb-4">Shopping Cart</h1>
+          <p className="text-xl text-gray-600 mb-12">Your cart is empty</p>
+          <div className="bg-gray-50 rounded-lg p-12 text-center">
+            <p className="text-black mb-8 text-lg">Start adding products to your cart!</p>
+            <Link href="/products" className="inline-block text-white px-8 py-3 rounded-lg font-semibold hover:opacity-90 transition" style={{ backgroundColor: '#77BEF0' }}>
+              Continue Shopping
+            </Link>
+          </div>
         </div>
       </main>
     );
   }
 
   return (
-    <main className="container mx-auto px-4 py-12">
-      <h1 className="text-4xl font-bold text-gray-900 mb-8">Shopping Cart</h1>
+    <main className="bg-white min-h-screen">
+      <div className="container mx-auto px-4 py-20">
+        <h1 className="text-5xl font-bold text-black mb-4">Shopping Cart</h1>
+        <p className="text-xl text-gray-600 mb-12">Review your items before checkout</p>
 
-      <div className="grid lg:grid-cols-3 gap-8">
-        {/* Cart Items */}
-        <div className="lg:col-span-2">
-          <div className="bg-white rounded-lg shadow-md overflow-hidden">
-            <table className="w-full">
-              <thead className="border-b" style={{ backgroundColor: '#FFF1CB' }}>
-                <tr>
-                  <th className="px-6 py-4 text-left font-semibold text-black">Product</th>
-                  <th className="px-6 py-4 text-center font-semibold text-black">Quantity</th>
-                  <th className="px-6 py-4 text-right font-semibold text-black">Price</th>
-                </tr>
-              </thead>
-              <tbody>
-                {cart.lines.map((item) => (
-                  <tr key={item.id} className="border-b hover:bg-gray-50">
-                    <td className="px-6 py-4">
-                      <Link
-                        href={`/products/${item.merchandise.product.handle}`}
-                        className="hover:underline"
-                        style={{ color: '#FF8F8F' }}
-                      >
-                        {item.merchandise.product.title}
-                      </Link>
-                    </td>
-                    <td className="px-6 py-4 text-center">{item.quantity}</td>
-                    <td className="px-6 py-4 text-right font-semibold">
-                      ${(
-                        parseFloat(item.merchandise.priceV2.amount) * item.quantity
-                      ).toFixed(2)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <div className="grid lg:grid-cols-3 gap-12">
+          {/* Cart Items */}
+          <div className="lg:col-span-2">
+            <div className="bg-gray-50 rounded-lg overflow-hidden">
+              <div className="space-y-4 p-6">
+                {cartLines.map((item) => {
+                  const imageUrl = item.merchandise.product.images?.edges?.[0]?.node?.url;
+                  const altText = item.merchandise.product.images?.edges?.[0]?.node?.altText || 'Product image';
 
-        {/* Order Summary */}
-        <div>
-          <div className="bg-white rounded-lg shadow-md p-6 sticky top-4">
-            <h2 className="text-2xl font-bold mb-4 text-black">Order Summary</h2>
+                  return (
+                    <div key={item.id} className="bg-white rounded-lg p-6 hover:shadow-md transition">
+                      <div className="flex gap-6">
+                        {/* Product Image */}
+                        <div className="w-24 h-24 bg-gray-100 rounded-lg flex-shrink-0 flex items-center justify-center overflow-hidden">
+                          {imageUrl ? (
+                            <Image
+                              src={imageUrl}
+                              alt={altText}
+                              width={96}
+                              height={96}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="text-gray-400">No image</div>
+                          )}
+                        </div>
 
-            <div className="space-y-3 mb-6">
-              <div className="flex justify-between text-black">
-                <span>Subtotal</span>
-                <span>${cart.cost.subtotalAmount.amount}</span>
-              </div>
-              <div className="flex justify-between text-black">
-                <span>Tax</span>
-                <span>${cart.cost.totalTaxAmount.amount}</span>
-              </div>
-              <div className="border-t pt-3 flex justify-between font-bold text-lg text-black">
-                <span>Total</span>
-                <span>${cart.cost.totalAmount.amount}</span>
+                        <div className="flex-1">
+                          <Link
+                            href={`/products/${item.merchandise.product.handle}`}
+                            className="text-lg font-semibold text-black hover:opacity-75 transition mb-2 block"
+                          >
+                            {item.merchandise.product.title}
+                          </Link>
+
+                          <div className="flex items-center gap-4 mb-4">
+                            <button
+                              onClick={() => handleUpdateQuantity(item.id, item.quantity - 1)}
+                              className="p-1 rounded hover:bg-gray-100 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                              disabled={item.quantity <= 1 || isLoading}
+                              type="button"
+                            >
+                              <Minus size={18} className={item.quantity <= 1 || isLoading ? 'text-gray-300' : 'text-black'} />
+                            </button>
+                            <span className="font-semibold text-black w-8 text-center">{item.quantity}</span>
+                            <button
+                              onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)}
+                              className="p-1 rounded hover:bg-gray-100 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                              disabled={isLoading}
+                              type="button"
+                            >
+                              <Plus size={18} className={isLoading ? 'text-gray-300' : 'text-black'} />
+                            </button>
+                          </div>
+
+                          <div className="text-xl font-bold text-black mb-4">
+                            ${(parseFloat(item.merchandise.priceV2.amount) * item.quantity).toFixed(2)}
+                          </div>
+
+                          <button
+                            onClick={() => handleRemove(item.id)}
+                            className="flex items-center gap-2 text-red-500 hover:text-red-700 transition font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled={isLoading}
+                            type="button"
+                          >
+                            <Trash2 size={18} />
+                            {isLoading ? 'Updating...' : 'Remove'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
+          </div>
 
-            <button className="w-full text-white font-bold py-3 rounded-lg transition mb-3" style={{ backgroundColor: '#FF8F8F' }}>
-              Proceed to Checkout
-            </button>
+          {/* Order Summary */}
+          <div>
+            <div className="bg-gray-50 rounded-lg p-8 sticky top-8">
+              <h2 className="text-2xl font-bold mb-8 text-black">Order Summary</h2>
 
-            <Link
-              href="/products"
-              className="block w-full text-center text-black font-semibold py-3 rounded-lg transition"
-              style={{ backgroundColor: '#BADFDB' }}
-            >
-              Continue Shopping
-            </Link>
+              <div className="space-y-4 mb-8">
+                <div className="flex justify-between text-black">
+                  <span className="text-gray-600">Subtotal</span>
+                  <span className="font-semibold">${cart.cost?.subtotalAmount?.amount || '0.00'}</span>
+                </div>
+                <div className="flex justify-between text-black">
+                  <span className="text-gray-600">Tax</span>
+                  <span className="font-semibold">${cart.cost?.totalTaxAmount?.amount || '0.00'}</span>
+                </div>
+                <div className="border-t border-gray-300 pt-4 flex justify-between">
+                  <span className="text-lg font-semibold text-black">Total</span>
+                  <span className="text-2xl font-bold text-black">${cart.cost?.totalAmount?.amount || '0.00'}</span>
+                </div>
+              </div>
+
+              <button 
+                onClick={() => {
+                  if (cart?.checkoutUrl) {
+                    window.location.href = cart.checkoutUrl;
+                  }
+                }}
+                className="w-full text-white font-semibold py-4 rounded-lg transition mb-3 hover:opacity-90"
+                style={{ backgroundColor: '#77BEF0' }}
+              >
+                Proceed to Checkout
+              </button>
+
+              <Link
+                href="/products"
+                className="block w-full text-center text-black font-semibold py-4 rounded-lg transition hover:opacity-75"
+                style={{ backgroundColor: '#cbdfbd' }}
+              >
+                Continue Shopping
+              </Link>
+            </div>
           </div>
         </div>
       </div>
